@@ -1,0 +1,148 @@
+sources:
+  spanner-graph:
+    database: ${GOOGLE_SPANNER_DATABASE}
+    instance: ${GOOGLE_SPANNER_INSTANCE}
+    kind: spanner
+    project: ${GOOGLE_PROJECT}
+
+tools:
+
+  notify_customer:
+    description: Given a customer send them a notification of service disruption
+    kind: spanner-sql
+    readOnly: true
+    source: spanner-graph
+    parameters:
+    - description: consumer id
+      name: c_id
+      type: string
+    statement: SELECT "Notifing @c_id";
+
+  blast_radius:
+    description: Given a bad producer list up all of the customer effected
+    kind: spanner-sql
+    readOnly: true
+    source: spanner-graph
+    parameters:
+    - description: producer id
+      name: p_id
+      type: string
+    statement: >
+      GRAPH NetworkGraph
+        MATCH (p:Producers{NodeId: @p_id})-[e:Connections_PT|Connections_TT]-{1,2}->(t:TransitNodes)-[:Connections_TC]->(c:Consumers)
+        RETURN DISTINCT c.NodeId as Consumer;
+
+  p_upstream:
+    description: Given a transit node find all upstream producer nodes
+    kind: spanner-sql
+    readOnly: true
+    source: spanner-graph
+    parameters:
+    - description: transit id
+      name: t_id
+      type: string
+    statement: >
+      GRAPH NetworkGraph
+        MATCH (p:Producers)-[e:Connections_PT|Connections_TT]-{1,4}->(t:TransitNodes{NodeId: @t_id})
+        RETURN p.NodeId as P_ID, MIN(ARRAY_LENGTH(e)) as Hops
+        GROUP by P_ID ORDER BY Hops ASC;      
+
+  customer_status:
+    description: Given a customer id look up their status
+    kind: spanner-sql
+    readOnly: true
+    source: spanner-graph
+    parameters:
+    - description: customer id
+      name: c_id
+      type: string
+    statement:
+      SELECT NodeId, Status from Consumers WHERE NodeId = @c_id;
+
+  customer_search:
+    description: Given a customer phone number or address
+    kind: spanner-sql
+    readOnly: true
+    source: spanner-graph
+    parameters:
+    - description: Phone number
+      name: phone
+      type: string
+    - description: Address
+      name: address
+      type: string
+    statement:
+      SELECT 'C_1125';
+
+  t_node:
+    description: Given a Transit Node id which starts with T_ then query the status of that node 
+    kind: spanner-sql
+    readOnly: true
+    source: spanner-graph
+    parameters:
+    - description: Transit Node ID
+      name: t_node
+      type: string
+    statement:
+      SELECT NodeId, NodeType, Status FROM TransitNodes WHERE NodeId = @t_node;
+
+  p_node:
+    description: Given a Producer Node id which starts with T_ then query the status of that node 
+    kind: spanner-sql
+    readOnly: true
+    source: spanner-graph
+    parameters:
+    - description: Transit Node ID
+      name: p_node
+      type: string
+    statement:
+      SELECT NodeId, NodeType, Status FROM Producers WHERE NodeId = @p_node;
+
+
+  rca:
+    description: Given a customer Attempt to diagnose the root cause of a network outage. Return the results as a table and answer any follow up questions
+    kind: spanner-sql
+    readOnly: true
+    source: spanner-graph
+    parameters:
+    - description: customer id
+      name: c_id
+      type: string
+    statement: >
+      SELECT
+        TransitNode,
+        TotalDownstream,
+        OfflineDownstream,
+        ROUND( SAFE_DIVIDE(OfflineDownstream, TotalDownstream) * SAFE_DIVIDE(OfflineDownstream, 3.0), 4) AS SuspicionScore,
+        ROUND(SAFE_DIVIDE(OfflineDownstream, TotalDownstream), 2) AS DownstreamImpactRatio,
+        ROUND(SAFE_DIVIDE(OfflineDownstream, 3.0), 2) AS GlobalFaultCoverage
+      FROM (
+        SELECT
+          TransitNode,
+          COUNT(ConsumerId) AS TotalDownstream,
+          COUNT(
+            CASE
+              WHEN ConsumerId  = @c_id THEN 1
+          END
+            ) AS OfflineDownstream
+        FROM
+          GRAPH_TABLE(
+              NetworkGraph MATCH(t:TransitNodes)
+              -[:Connections_TT]->{0,10}(:TransitNodes)
+            -[:Connections_TC]-> (c:`Consumers`)
+              COLUMNS(t.NodeId AS TransitNode, c.NodeId AS ConsumerId)
+        )
+      GROUP BY TransitNode)
+      WHERE OfflineDownstream > 0
+      ORDER BY SuspicionScore DESC LIMIT 5
+
+toolsets:
+  customerservice:
+    - rca
+    - t_node
+    - p_node
+    - p_upstream
+    - customer_search
+    - customer_status
+    - blast_radius
+    - notify_customer

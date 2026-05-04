@@ -8,6 +8,8 @@ wheels/
 
 # Settings
 .env
+Agent/.env
+Agent/toolbox
 
 # Virtual environments
 .venv
