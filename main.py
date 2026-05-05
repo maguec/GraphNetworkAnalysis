@@ -18,7 +18,8 @@ instance = spanner_client.instance(GOOGLE_SPANNER_INSTANCE)
 database = instance.database(GOOGLE_SPANNER_DATABASE)
 
 # Custom CSS for prominent striping
-ui.add_head_html('''
+ui.add_head_html(
+    """
     <style>
         .q-table tbody tr:nth-child(even) {
             background-color: #f9f9f9;
@@ -27,7 +28,10 @@ ui.add_head_html('''
             background-color: #f1f1f1;
         }
     </style>
-''', shared=True)
+""",
+    shared=True,
+)
+
 
 def query_spanner(query: str) -> List[Dict[str, Any]]:
     with database.snapshot() as snapshot:
@@ -36,76 +40,106 @@ def query_spanner(query: str) -> List[Dict[str, Any]]:
         columns = [column.name for column in results.fields] if results.fields else []
         return [dict(zip(columns, row)) for row in rows_list]
 
+
 def get_blast_radius_data(producer_id: str) -> Dict[str, Any]:
     query = f"""
     GRAPH NetworkGraph
     MATCH mypath=(p:Producers{{NodeId: '{producer_id}'}})-[:Connections_PT]->(t:TransitNodes)-[:Connections_TT]-{{0,2}}->(t2:TransitNodes)
     RETURN SAFE_TO_JSON(mypath) AS JSON
     """
-    print(f"\nDEBUG: Executing GSQL Query for {producer_id}:\n{query}")
     rows = query_spanner(query)
-    print(f"DEBUG: Query returned {len(rows)} rows")
-    
+
     nodes = {}
     links = []
     seen_links = set()
 
     for row_idx, row in enumerate(rows):
-        raw_json = row.get('JSON')
-        if not raw_json: continue
-            
+        raw_json = row.get("JSON")
+        if raw_json is None:
+            continue
+
         try:
             if isinstance(raw_json, str):
                 path_elements = json.loads(raw_json)
+            elif hasattr(raw_json, "serialize"):
+                # Handle google.cloud.spanner_v1.data_types.JsonObject
+                path_elements = json.loads(raw_json.serialize())
+            elif isinstance(raw_json, (list, dict)):
+                path_elements = raw_json
             else:
                 path_elements = json.loads(json.dumps(raw_json, default=str))
         except Exception as e:
             print(f"DEBUG: Row {row_idx} failed to parse JSON: {e}")
             continue
 
-        if not isinstance(path_elements, list): continue
+        if not isinstance(path_elements, list):
+            continue
 
-        print(f"DEBUG: ROW {row_idx} PATH ELEMENTS:")
         for i, element in enumerate(path_elements):
-            kind = element.get('kind')
-            if kind == 'node':
-                props = element.get('properties', {})
-                node_id = props.get('NodeId') or str(element.get('identifier'))
-                print(f"  [NODE] {node_id}")
+            kind = element.get("kind")
+            if kind == "node":
+                props = element.get("properties", {})
+                node_id = props.get("NodeId") or str(element.get("identifier"))
                 if node_id not in nodes:
-                    label = element.get('labels', ['Unknown'])[0]
-                    nodes[node_id] = {"id": node_id, "name": f"{label}: {node_id}", "group": label}
-            elif kind == 'edge':
+                    label = element.get("labels", ["Unknown"])[0]
+                    color = "gray"
+                    font_size_multiplier = 1.0
+                    font_weight = "normal"
+
+                    if label == "Producers":
+                        color = "red"
+                        font_weight = "bold"
+                    elif label == "TransitNodes":
+                        color = "darkorange"
+                        font_size_multiplier = 0.8
+
+                    nodes[node_id] = {
+                        "id": node_id,
+                        "name": node_id,
+                        "group": label,
+                        "color": color,
+                        "fontSizeMultiplier": font_size_multiplier,
+                        "fontWeight": font_weight,
+                    }
+
+            elif kind == "edge":
                 if i > 0 and i < len(path_elements) - 1:
-                    src_node, tgt_node = path_elements[i-1], path_elements[i+1]
-                    src_id = src_node.get('properties', {}).get('NodeId') or str(src_node.get('identifier'))
-                    tgt_id = tgt_node.get('properties', {}).get('NodeId') or str(tgt_node.get('identifier'))
-                    label = element.get('labels', ['connected'])[0]
-                    print(f"  [EDGE] {src_id} -[{label}]-> {tgt_id}")
+                    src_node, tgt_node = path_elements[i - 1], path_elements[i + 1]
+                    src_id = src_node.get("properties", {}).get("NodeId") or str(
+                        src_node.get("identifier")
+                    )
+                    tgt_id = tgt_node.get("properties", {}).get("NodeId") or str(
+                        tgt_node.get("identifier")
+                    )
+                    label = element.get("labels", ["connected"])[0]
                     link_key = (src_id, tgt_id, label)
                     if link_key not in seen_links:
-                        links.append({"source": src_id, "target": tgt_id, "type": label})
+                        links.append(
+                            {"source": src_id, "target": tgt_id, "type": label}
+                        )
                         seen_links.add(link_key)
 
     result = {"nodes": list(nodes.values()), "links": links}
-    print(f"DEBUG: Final result for {producer_id}: {len(result['nodes'])} nodes, {len(result['links'])} links\n")
     return result
 
-@ui.page('/')
+
+@ui.page("/")
 async def index():
-    with ui.column().classes('w-full items-center justify-center mt-8'):
-        ui.label('Network Graph Analysis').classes('text-h2 mb-2')
-        ui.label('Monitor, Analyze, and Visualize Spanner-backed Network Data').classes('text-h6 text-gray-500 mb-6')
+    with ui.column().classes("w-full items-center justify-center mt-8"):
+        ui.label("Network Graph Analysis").classes("text-h2 mb-2")
+        ui.label("Monitor, Analyze, and Visualize Spanner-backed Network Data").classes(
+            "text-h6 text-gray-500 mb-6"
+        )
 
-    with ui.tabs().classes('w-full shadow-2 rounded-t-lg') as tabs:
-        home_tab = ui.tab('Overview', icon='home')
-        rca_tab = ui.tab('Network RCA', icon='analytics')
-        blast_radius_tab = ui.tab('Blast Radius', icon='hub')
+    with ui.tabs().classes("w-full shadow-2 rounded-t-lg") as tabs:
+        home_tab = ui.tab("Overview", icon="home")
+        rca_tab = ui.tab("Network RCA", icon="analytics")
+        blast_radius_tab = ui.tab("Blast Radius", icon="hub")
 
-    with ui.tab_panels(tabs, value=home_tab).classes('w-full shadow-2 rounded-b-lg'):
+    with ui.tab_panels(tabs, value=home_tab).classes("w-full shadow-2 rounded-b-lg"):
         with ui.tab_panel(home_tab):
-            with ui.column().classes('w-full items-center py-12'):
-                ui.mermaid('''
+            with ui.column().classes("w-full items-center py-12"):
+                ui.mermaid("""
                     graph LR
                         P((Producers)):::producer --> T1((Transit Nodes)):::transit
                         T1 --> T2((Transit Nodes)):::transit
@@ -114,15 +148,19 @@ async def index():
                         classDef producer fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
                         classDef transit fill:#fff3e0,stroke:#e65100,stroke-width:2px;
                         classDef consumer fill:#f1f8e9,stroke:#33691e,stroke-width:2px;
-                ''').classes('w-[500px] h-48')
-                ui.label('Spanner Property Graph Analysis').classes('text-h5 mt-4 text-gray-600')
+                """).classes("w-[500px] h-48")
+                ui.label("Spanner Property Graph Analysis").classes(
+                    "text-h5 mt-4 text-gray-600"
+                )
 
         with ui.tab_panel(rca_tab):
-            ui.label('Network Root Cause Analysis').classes('text-h4 mb-4')
+            ui.label("Network Root Cause Analysis").classes("text-h4 mb-4")
+
             async def refresh_rca():
                 rca_container.clear()
                 with rca_container:
                     ui.spinner()
+
                     def get_rca():
                         query = """
                         SELECT
@@ -142,42 +180,63 @@ async def index():
                         ORDER BY SuspicionScore DESC LIMIT 15;
                         """
                         return query_spanner(query)
+
                     df_data = await asyncio.to_thread(get_rca)
                     rca_container.clear()
                     if not df_data:
-                        ui.label('No issues detected.')
+                        ui.label("No issues detected.")
                     else:
                         ui.table(
-                            columns=[{'name': k, 'label': k, 'field': k, 'sortable': True} for k in df_data[0].keys()],
+                            columns=[
+                                {"name": k, "label": k, "field": k, "sortable": True}
+                                for k in df_data[0].keys()
+                            ],
                             rows=df_data,
-                        ).classes('w-full rounded-lg overflow-hidden').props('flat bordered striped dense')
+                        ).classes("w-full rounded-lg overflow-hidden").props(
+                            "flat bordered striped dense"
+                        )
 
-            rca_container = ui.column().classes('w-full')
-            ui.button('Refresh RCA', icon='refresh', on_click=refresh_rca).classes('mt-4')
+            rca_container = ui.column().classes("w-full")
+            ui.button("Refresh RCA", icon="refresh", on_click=refresh_rca).classes(
+                "mt-4"
+            )
             ui.timer(0.1, refresh_rca, once=True)
 
         with ui.tab_panel(blast_radius_tab):
-            ui.label('Producer Blast Radius').classes('text-h4 mb-4')
-            producers = [r['NodeId'] for r in query_spanner("SELECT NodeId FROM Producers ORDER BY NodeId")]
-            
+            ui.label("Producer Blast Radius").classes("text-h4 mb-4")
+            producers = [
+                r["NodeId"]
+                for r in query_spanner("SELECT NodeId FROM Producers ORDER BY NodeId")
+            ]
+
             async def on_change(e):
-                if not e.value: return
-                n = ui.notification('Fetching blast radius data...', loading=True, timeout=None)
+                if not e.value:
+                    return
+                n = ui.notification(
+                    "Fetching blast radius data...", loading=True, timeout=None
+                )
                 try:
                     data = await asyncio.to_thread(get_blast_radius_data, e.value)
-                    if not data['nodes']: ui.notify('No connections found.', type='warning')
+                    if not data["nodes"]:
+                        ui.notify("No connections found.", type="warning")
                     await ui.run_javascript(f"window.renderGraph({json.dumps(data)})")
                 except Exception as ex:
-                    ui.notify(f"Error: {str(ex)}", type='negative')
+                    ui.notify(f"Error: {str(ex)}", type="negative")
                 finally:
                     n.dismiss()
 
-            ui.select(producers, label='Select Producer', on_change=on_change).classes('w-64')
-            ui.html('<div id="graph" style="width: 100%; height: 700px; border: 1px solid #ddd;" class="mt-4"></div>')
+            ui.select(producers, label="Select Producer", on_change=on_change).classes(
+                "w-64"
+            )
+            ui.html(
+                '<div id="graph" style="width: 100%; height: 700px; border: 1px solid #ddd;" class="mt-4"></div>'
+            )
+
 
 # Global scripts for ForceGraph
 ui.add_head_html('<script src="https://unpkg.com/force-graph"></script>', shared=True)
-ui.add_body_html("""
+ui.add_body_html(
+    """
 <script>
 let Graph;
 window.renderGraph = function(data) {
@@ -190,15 +249,16 @@ window.renderGraph = function(data) {
             .height(700)
             .nodeCanvasObject((node, ctx, globalScale) => {
                 const label = node.name;
-                const fontSize = 14/globalScale;
-                ctx.font = `${fontSize}px Sans-Serif`;
+                const fontSize = (14 * (node.fontSizeMultiplier || 1.0)) / globalScale;
+                const fontWeight = node.fontWeight || 'normal';
+                ctx.font = `${fontWeight} ${fontSize}px Sans-Serif`;
                 const textWidth = ctx.measureText(label).width;
                 const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.2);
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
                 ctx.fillRect(node.x - bckgDimensions[0] / 2, node.y - bckgDimensions[1] / 2, ...bckgDimensions);
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillStyle = node.color;
+                ctx.fillStyle = node.color || 'gray';
                 ctx.fillText(label, node.x, node.y);
                 node.__bckgDimensions = bckgDimensions;
             })
@@ -213,6 +273,8 @@ window.renderGraph = function(data) {
     Graph.onEngineStop(() => Graph.zoomToFit(400, 0.8));
 };
 </script>
-""", shared=True)
+""",
+    shared=True,
+)
 
 ui.run(title="Network Graph Analysis", port=8080)
