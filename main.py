@@ -134,18 +134,16 @@ def get_blast_radius_data(producer_id: str) -> Dict[str, Any]:
 
 @ui.page("/")
 async def index():
-    with ui.column().classes("w-full items-center justify-center mt-8"):
-        ui.label("Network Graph Analysis").classes("text-h2 mb-2")
-        ui.label("Monitor, Analyze, and Visualize Spanner-backed Network Data").classes(
-            "text-h6 text-gray-500 mb-6"
-        )
+    with ui.row().classes(
+        "w-full items-center justify-between px-4 py-1 bg-gray-100 shadow-1"
+    ):
+        ui.label("Network Analysis").classes("text-h6")
+        with ui.tabs().props("dense") as tabs:
+            home_tab = ui.tab("Overview", icon="home")
+            rca_tab = ui.tab("RCA", icon="analytics")
+            blast_radius_tab = ui.tab("Blast Radius", icon="hub")
 
-    with ui.tabs().classes("w-full shadow-2 rounded-t-lg") as tabs:
-        home_tab = ui.tab("Overview", icon="home")
-        rca_tab = ui.tab("Network RCA", icon="analytics")
-        blast_radius_tab = ui.tab("Blast Radius", icon="hub")
-
-    with ui.tab_panels(tabs, value=home_tab).classes("w-full shadow-2 rounded-b-lg"):
+    with ui.tab_panels(tabs, value=home_tab).classes("w-full"):
         with ui.tab_panel(home_tab):
             with ui.column().classes("w-full items-center py-12"):
                 ui.mermaid("""
@@ -158,7 +156,7 @@ async def index():
                         classDef transit fill:#fff3e0,stroke:#e65100,stroke-width:2px;
                         classDef consumer fill:#f1f8e9,stroke:#33691e,stroke-width:2px;
                 """).classes("w-[500px] h-48")
-                ui.label("Spanner Property Graph Analysis").classes(
+                ui.label("Spanner Network Graph Analysis").classes(
                     "text-h5 mt-4 text-gray-600"
                 )
 
