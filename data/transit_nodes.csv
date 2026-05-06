@@ -20,7 +20,7 @@ T_17,Transit,UP
 T_18,Transit,UP
 T_19,Transit,UP
 T_20,Transit,UP
-T_21,Transit,UP
+T_21,Transit,DOWN
 T_22,Transit,UP
 T_23,Transit,UP
 T_24,Transit,UP
@@ -70,7 +70,7 @@ T_67,Transit,UP
 T_68,Transit,UP
 T_69,Transit,UP
 T_70,Transit,UP
-T_71,Transit,UP
+T_71,Transit,DOWN
 T_72,Transit,UP
 T_73,Transit,UP
 T_74,Transit,UP
@@ -98,7 +98,7 @@ T_95,Transit,UP
 T_96,Transit,UP
 T_97,Transit,UP
 T_98,Transit,UP
-T_99,Transit,UP
+T_99,Transit,DOWN
 T_100,Transit,UP
 T_101,Transit,UP
 T_102,Transit,UP
@@ -649,7 +649,7 @@ T_646,Transit,UP
 T_647,Transit,UP
 T_648,Transit,UP
 T_649,Transit,UP
-T_650,Transit,UP
+T_650,Transit,DOWN
 T_651,Transit,UP
 T_652,Transit,UP
 T_653,Transit,UP
