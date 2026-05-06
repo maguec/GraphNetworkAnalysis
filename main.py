@@ -82,17 +82,26 @@ def get_blast_radius_data(producer_id: str) -> Dict[str, Any]:
                 props = element.get("properties", {})
                 node_id = props.get("NodeId") or str(element.get("identifier"))
                 if node_id not in nodes:
+                    props = element.get("properties", {})
+                    status = props.get("Status", "UNKNOWN").upper()
                     label = element.get("labels", ["Unknown"])[0]
-                    color = "gray"
-                    font_size_multiplier = 1.0
-                    font_weight = "normal"
 
-                    if label == "Producers":
+                    # Font size based on node type
+                    font_size_multiplier = 0.8 if label == "TransitNodes" else 1.0
+
+                    # Color and weight based on status and type
+                    # Producers are bold by default; DOWN nodes are also bold
+                    is_producer = label == "Producers"
+                    is_down = status == "DOWN"
+
+                    font_weight = "bold" if (is_producer or is_down) else "normal"
+
+                    if status == "UP":
+                        color = "green"
+                    elif status == "DOWN":
                         color = "red"
-                        font_weight = "bold"
-                    elif label == "TransitNodes":
-                        color = "darkorange"
-                        font_size_multiplier = 0.8
+                    else:
+                        color = "gray"
 
                     nodes[node_id] = {
                         "id": node_id,
@@ -102,7 +111,6 @@ def get_blast_radius_data(producer_id: str) -> Dict[str, Any]:
                         "fontSizeMultiplier": font_size_multiplier,
                         "fontWeight": font_weight,
                     }
-
             elif kind == "edge":
                 if i > 0 and i < len(path_elements) - 1:
                     src_node, tgt_node = path_elements[i - 1], path_elements[i + 1]
