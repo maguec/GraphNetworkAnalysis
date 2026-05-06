@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 from typing import List, Dict, Any
+from fastapi import Response
 from dotenv import load_dotenv
 from google.cloud import spanner
 from nicegui import ui, app
@@ -276,5 +277,19 @@ window.renderGraph = function(data) {
 """,
     shared=True,
 )
+
+
+@app.get("/v1/health")
+def health_check(response: Response):
+    try:
+        with database.snapshot() as snapshot:
+            # Execute a simple query to verify database connectivity
+            results = snapshot.execute_sql("SELECT 1")
+            list(results)  # Consume results to ensure execution
+        return {"status": "healthy", "database": "connected"}
+    except Exception as e:
+        response.status_code = 500
+        return {"status": "unhealthy", "error": str(e)}
+
 
 ui.run(title="Network Graph Analysis", port=8080)
