@@ -13,3 +13,6 @@ Agent/toolbox
 
 # Virtual environments
 .venv
+
+# Agent context
+Agent/customer_service/.adk/*

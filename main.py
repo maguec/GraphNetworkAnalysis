@@ -146,7 +146,8 @@ async def index():
     with ui.tab_panels(tabs, value=home_tab).classes("w-full"):
         with ui.tab_panel(home_tab):
             with ui.column().classes("w-full items-center py-12"):
-                ui.mermaid("""
+                ui.mermaid(
+                    """
                     graph LR
                         P((Producers)):::producer --> T1((Transit Nodes)):::transit
                         T1 --> T2((Transit Nodes)):::transit
@@ -155,7 +156,8 @@ async def index():
                         classDef producer fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
                         classDef transit fill:#fff3e0,stroke:#e65100,stroke-width:2px;
                         classDef consumer fill:#f1f8e9,stroke:#33691e,stroke-width:2px;
-                """).classes("w-[500px] h-48")
+                """
+                ).classes("w-[500px] h-48")
                 ui.label("Spanner Network Graph Analysis").classes(
                     "text-h5 mt-4 text-gray-600"
                 )
@@ -298,4 +300,4 @@ def health_check(response: Response):
         return {"status": "unhealthy", "error": str(e)}
 
 
-ui.run(title="Network Graph Analysis", port=8080)
+ui.run(title="Network Graph Analysis", port=8088)
